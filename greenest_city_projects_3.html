@@ -116,6 +116,12 @@ d3.csv("greenest_city_projects.csv").then(raw => {
   let selected = null;
   const groups = [];
 
+  // Returns the base opacity for petal i given current selection state
+  function baseOpacity(i) {
+    if (selected === null) return 0.9;
+    return i === selected ? 1 : 0.14;
+  }
+
   goals.forEach((g, i) => {
     const angle = (i / N) * 2 * Math.PI - Math.PI / 2;
     const deg   = angle * 180 / Math.PI + 90 + SWIRL;
@@ -139,41 +145,54 @@ d3.csv("greenest_city_projects.csv").then(raw => {
       .attr('stroke-linecap', 'round');
 
     grp.on('mouseenter', function() {
-      if (selected !== i) d3.select(this).attr('opacity', 1).raise();
+      // Always brighten on hover — selected petal stays at 1, dim ones lift to 0.35
+      d3.select(this).attr('opacity', i === selected ? 1 : (selected === null ? 1 : 0.35));
     }).on('mouseleave', function() {
-      if (selected !== i) d3.select(this).attr('opacity', selected === null ? 0.9 : 0.15);
+      d3.select(this).attr('opacity', baseOpacity(i));
     }).on('click', function(event) {
       event.stopPropagation();
-      if (selected === i) { selected = null; resetAll(); showEmpty(); }
-      else { selected = i; highlightSelected(i); showInfo(g); }
+      if (selected === i) {
+        selected = null;
+        resetAll();
+        showEmpty();
+      } else {
+        selected = i;
+        highlightSelected(i);
+        showInfo(g);
+      }
     });
 
     groups.push({ grp, i, deg });
   });
 
-  svg.append('circle')
+  // Center circle appended LAST — always on top, no pointer events
+  const centerGroup = svg.append('g').style('pointer-events', 'none');
+
+  centerGroup.append('circle')
     .attr('cx', cx).attr('cy', cy).attr('r', 22)
     .attr('fill', '#ffffff').attr('stroke', '#D3D1C7').attr('stroke-width', 0.5);
-  svg.append('text')
+
+  centerGroup.append('text')
     .attr('x', cx).attr('y', cy - 6)
     .attr('text-anchor', 'middle').attr('dominant-baseline', 'central')
     .attr('font-size', 15).attr('font-weight', 500).attr('fill', '#1A1A1A')
     .text(total);
-  svg.append('text')
+
+  centerGroup.append('text')
     .attr('x', cx).attr('y', cy + 10)
     .attr('text-anchor', 'middle').attr('font-size', 8).attr('fill', '#888780')
     .text('projects');
 
   function resetAll() {
     groups.forEach(({grp, deg}) => {
-      grp.attr('opacity', 0.9).attr('transform', `translate(${cx},${cy}) rotate(${deg})`);
+      grp.attr('opacity', 0.9)
+         .attr('transform', `translate(${cx},${cy}) rotate(${deg})`);
     });
   }
 
   function highlightSelected(idx) {
     groups.forEach(({grp, i}) => {
-      if (i === idx) grp.attr('opacity', 1).raise();
-      else grp.attr('opacity', 0.14);
+      grp.attr('opacity', i === idx ? 1 : 0.14);
     });
   }
 
@@ -183,8 +202,8 @@ d3.csv("greenest_city_projects.csv").then(raw => {
 
   function showInfo(g) {
     const pct  = Math.round((g.count / total) * 100);
-    const rows = g.types.map(([type, n]) => `
-      <div class="p-type">${type} · <strong>${n}</strong></div>`).join('');
+    const rows = g.types.map(([type, n]) =>
+      `<div class="p-type">${type} · <strong>${n}</strong></div>`).join('');
     document.getElementById('panel').innerHTML = `
       <p class="p-goal">${g.name}</p>
       <p class="p-count">${g.count}</p>
