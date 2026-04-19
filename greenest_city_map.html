@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vancouver Greenest City — Interactive Map</title>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      height: 100vh; overflow: hidden; background: #E8F3FA;
+    }
+
+    #map { position: absolute; inset: 0; }
+
+    .mapboxgl-ctrl-attrib { font-size: 9px !important; opacity: 0.5; }
+    .mapboxgl-ctrl-group {
+      border-radius: 10px !important;
+      box-shadow: 0 2px 10px rgba(100,160,200,0.18) !important;
+      border: 1px solid rgba(180,210,230,0.5) !important;
+    }
+
+    /* ─── Shared glass panel ─── */
+    .glass-panel {
+      background: rgba(255,255,255,0.90);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: 22px;
+      box-shadow: 0 8px 36px rgba(80,150,200,0.16), 0 2px 8px rgba(0,0,0,0.07);
+      border: 1px solid rgba(185,215,235,0.55);
+      position: absolute;
+      z-index: 10;
+    }
+
+    /* ─── Title pill ─── */
+    #title-bar {
+      top: 26px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,255,255,0.88);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-radius: 100px;
+      padding: 9px 22px 9px 26px;
+      box-shadow: 0 4px 20px rgba(80,140,190,0.14), 0 1px 4px rgba(0,0,0,0.06);
+      border: 1px solid rgba(185,215,235,0.6);
+      z-index: 10; white-space: nowrap;
+      position: absolute;
+      display: flex; align-items: center; gap: 12px;
+    }
+    #title-bar h1 { font-size: 12.5px; font-weight: 500; color: #2B4A62; letter-spacing: 0.4px; }
+
+    #config-btn {
+      width: 22px; height: 22px; border-radius: 50%;
+      border: 1px solid rgba(185,215,235,0.8);
+      background: rgba(240,248,253,0.9);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      font-size: 11px; color: #7AAFC8; transition: all 0.15s; flex-shrink: 0;
+    }
+    #config-btn:hover { background: rgba(200,230,245,0.9); color: #2B4A62; }
+    #config-btn.connected { color: #4CAACC; border-color: #7DD4ED; background: rgba(200,240,250,0.9); }
+
+    #connection-badge {
+      display: none; font-size: 10px; color: #4CAACC;
+      background: rgba(200,240,250,0.85);
+      border: 1px solid rgba(130,210,235,0.5);
+      border-radius: 100px; padding: 2px 10px; white-space: nowrap;
+    }
+
+    /* ─── Chart panel (top-left) ─── */
+    #chart-panel {
+      top: 26px; left: 32px;
+      width: 390px;
+      padding: 18px 20px 16px;
+    }
+
+    #chart-header {
+      display: flex; align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    #chart-label {
+      font-size: 10px; font-weight: 500; color: #7AAFC8;
+      text-transform: uppercase; letter-spacing: 0.7px;
+    }
+    #chart-title {
+      font-size: 12px; font-weight: 500; color: #2B4A62;
+    }
+
+    #chart-wrap {
+      overflow: hidden;
+      transition: height 0.35s cubic-bezier(0.4,0,0.2,1);
+    }
+
+    /* SVG text styles */
+    .bar-label { font-size: 10px; fill: #4E7A95; font-family: inherit; }
+    .bar-val    { font-size: 9px;  fill: #7AAFC8; font-family: inherit; }
+    .axis-tick  { font-size: 8.5px; fill: #A8C4D4; font-family: inherit; }
+    .grid-line  { stroke: #E4EFF6; stroke-width: 0.8; }
+
+    /* ─── Flower panel (bottom-left) ─── */
+    #flower-panel {
+      bottom: 32px; left: 32px;
+      padding: 22px 22px 18px 22px;
+      display: flex; gap: 18px; align-items: flex-start;
+    }
+
+    #panel-info {
+      width: 158px; min-height: 158px;
+      display: flex; flex-direction: column;
+      justify-content: center; gap: 4px; padding-top: 4px;
+    }
+
+    .p-hint  { font-size: 11px; color: #98BCCE; line-height: 1.6; font-style: italic; text-align: center; padding: 20px 0; }
+    .p-goal  { font-size: 12.5px; font-weight: 500; color: #2B4A62; line-height: 1.3; }
+    .p-count { font-size: 40px; font-weight: 300; color: #1A3347; line-height: 1; letter-spacing: -2px; margin: 2px 0; }
+    .p-sub   { font-size: 9.5px; color: #7AAFC8; text-transform: uppercase; letter-spacing: 0.7px; }
+    .p-hr    { border: none; border-top: 0.5px solid #DCE9F2; margin: 7px 0 5px; }
+    .p-types { display: flex; flex-direction: column; gap: 4px; }
+    .p-type  { font-size: 11px; color: #4E7A95; }
+    .p-type strong { font-weight: 500; }
+
+    /* ─── Tooltip ─── */
+    #tooltip {
+      position: absolute;
+      background: rgba(255,255,255,0.96);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border-radius: 12px; padding: 10px 14px;
+      pointer-events: none;
+      box-shadow: 0 4px 18px rgba(80,140,190,0.2);
+      border: 1px solid rgba(185,215,235,0.7);
+      max-width: 230px; z-index: 20; display: none;
+    }
+    .tt-dot  { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; flex-shrink: 0; }
+    .tt-name { font-size: 12px; font-weight: 500; color: #1A3347; line-height: 1.35; display: flex; align-items: flex-start; }
+    .tt-cat  { font-size: 10px; color: #7AAFC8; margin-top: 4px; }
+    .tt-addr { font-size: 10px; color: #A8C4D4; margin-top: 2px; }
+
+    /* ─── Reset hint ─── */
+    #reset-hint {
+      position: absolute; bottom: 32px; right: 68px;
+      background: rgba(255,255,255,0.82);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border-radius: 100px; padding: 7px 16px;
+      font-size: 10.5px; color: #7AAFC8;
+      border: 1px solid rgba(185,215,235,0.5);
+      box-shadow: 0 2px 10px rgba(80,140,190,0.1);
+      cursor: pointer; z-index: 10; display: none;
+    }
+    #reset-hint:hover { color: #2B4A62; background: rgba(255,255,255,0.96); }
+
+    /* ─── Config overlay ─── */
+    #config-overlay {
+      position: absolute; inset: 0;
+      background: rgba(220,235,245,0.45);
+      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+      z-index: 30; display: none;
+      align-items: center; justify-content: center;
+    }
+    #config-overlay.visible { display: flex; }
+
+    #config-panel {
+      background: rgba(255,255,255,0.96);
+      border-radius: 20px; padding: 28px 30px 24px; width: 340px;
+      box-shadow: 0 12px 48px rgba(60,120,170,0.18), 0 2px 8px rgba(0,0,0,0.07);
+      border: 1px solid rgba(185,215,235,0.6);
+    }
+    #config-panel h2 { font-size: 14px; font-weight: 500; color: #1A3347; margin-bottom: 4px; }
+    #config-panel .config-sub { font-size: 11px; color: #7AAFC8; margin-bottom: 22px; line-height: 1.5; }
+    .config-field { margin-bottom: 16px; }
+    .config-field label {
+      display: block; font-size: 10.5px; font-weight: 500;
+      color: #4E7A95; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px;
+    }
+    .config-field select, .config-field input {
+      width: 100%; background: rgba(240,248,253,0.8);
+      border: 1px solid rgba(185,215,235,0.7);
+      border-radius: 10px; padding: 9px 12px;
+      font-size: 12px; color: #2B4A62; font-family: inherit;
+      outline: none; transition: border-color 0.15s;
+      appearance: none; -webkit-appearance: none;
+    }
+    .config-field select:focus, .config-field input:focus { border-color: #7AAFC8; background: white; }
+    .config-hint { font-size: 10px; color: #A8C4D4; margin-top: 5px; line-height: 1.4; }
+    .config-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+    .btn-cancel {
+      padding: 8px 18px; border-radius: 100px;
+      border: 1px solid rgba(185,215,235,0.6); background: transparent;
+      font-size: 12px; color: #7AAFC8; cursor: pointer; font-family: inherit;
+    }
+    .btn-cancel:hover { background: rgba(240,248,253,0.8); }
+    .btn-connect {
+      padding: 8px 22px; border-radius: 100px; border: none;
+      background: linear-gradient(135deg, #7AD3FF, #6083FF);
+      font-size: 12px; color: white; cursor: pointer;
+      font-family: inherit; font-weight: 500;
+      box-shadow: 0 3px 12px rgba(96,131,255,0.3); transition: opacity 0.15s;
+    }
+    .btn-connect:hover { opacity: 0.88; }
+    .btn-connect:disabled { opacity: 0.4; cursor: default; }
+    #config-error { font-size: 10.5px; color: #c05050; margin-top: 10px; display: none; text-align: center; }
+  </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="title-bar">
+  <h1>Vancouver Greenest City Projects</h1>
+  <span id="connection-badge"></span>
+  <div id="config-btn" title="Connect to Tableau">⚙</div>
+</div>
+
+<!-- Bar chart panel — top left -->
+<div id="chart-panel" class="glass-panel">
+  <div id="chart-header">
+    <span id="chart-label">Projects by Neighbourhood</span>
+    <span id="chart-title"></span>
+  </div>
+  <div id="chart-wrap">
+    <svg id="chart-svg" style="display:block;overflow:visible;"></svg>
+  </div>
+</div>
+
+<!-- Flower panel — bottom left -->
+<div id="flower-panel" class="glass-panel">
+  <div id="svg-wrap"></div>
+  <div id="panel-info">
+    <p class="p-hint">Click a petal<br>to explore projects</p>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+<div id="reset-hint">✕ &nbsp;clear filter</div>
+
+<!-- Config overlay -->
+<div id="config-overlay">
+  <div id="config-panel">
+    <h2>Connect to Tableau</h2>
+    <p class="config-sub">Choose the worksheet and field that contains<br>the Greenest City goal categories.</p>
+    <div class="config-field">
+      <label>Worksheet</label>
+      <select id="ws-select"><option value="">Loading worksheets…</option></select>
+    </div>
+    <div class="config-field">
+      <label>Category field name</label>
+      <input id="field-input" type="text" placeholder="e.g. Category2" value="Category2">
+      <p class="config-hint">Must match the field name in Tableau exactly (case-sensitive).<br>Expected values: Local-Food, Clean-Air, Green-Buildings, etc.</p>
+    </div>
+    <div id="config-error"></div>
+    <div class="config-actions">
+      <button class="btn-cancel" id="config-cancel">Cancel</button>
+      <button class="btn-connect" id="config-save">Connect</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════
+   CONSTANTS
+══════════════════════════════════════════════════════ */
+const MAPBOX_TOKEN = 'YOUR_MAPBOX_TOKEN';
+
+const goalColors = {
+  "Local-Food":           "#6083FF",
+  "Clean-Air":            "#7AD3FF",
+  "Lighter-Footprint":    "#60E7FF",
+  "Green-Buildings":      "#60FFF5",
+  "Access-to-Nature":     "#AAFF87",
+  "Zero-Waste":           "#9AFFB6",
+  "Green-Transportation": "#ACFFE9",
+  "Green-Economy":        "#FDE3FF",
+  "Climate-Leadership":   "#E7CDFF"
+};
+
+const goalNames = {
+  "Local-Food":           "Local Food",
+  "Clean-Air":            "Clean Air",
+  "Lighter-Footprint":    "Lighter Footprint",
+  "Green-Buildings":      "Green Buildings",
+  "Access-to-Nature":     "Access to Nature",
+  "Zero-Waste":           "Zero Waste",
+  "Green-Transportation": "Green Transportation",
+  "Green-Economy":        "Green Economy",
+  "Climate-Leadership":   "Climate Leadership"
+};
+
+const goalOrder = [
+  "Local-Food","Clean-Air","Lighter-Footprint","Green-Buildings",
+  "Access-to-Nature","Zero-Waste","Green-Transportation",
+  "Green-Economy","Climate-Leadership"
+];
+
+/* ══════════════════════════════════════════════════════
+   MAP
+══════════════════════════════════════════════════════ */
+mapboxgl.accessToken = MAPBOX_TOKEN;
+
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/light-v11',
+  center: [-123.128, 49.249],
+  zoom: 11.3, minZoom: 10, maxZoom: 16
+});
+
+map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right');
+
+let allProjects = [];
+
+/* ══════════════════════════════════════════════════════
+   DATA LOADING
+══════════════════════════════════════════════════════ */
+Promise.all([
+  d3.csv('https://raw.githubusercontent.com/camilla-scandola/vancity-greenest-city/main/greenest_city_projects.csv'),
+  d3.json('https://raw.githubusercontent.com/camilla-scandola/vancity-greenest-city/main/vancouver_neighbourhoods.geojson')
+]).then(([csv, geojson]) => {
+
+  allProjects = csv.filter(d =>
+    d.latitude && d.longitude &&
+    d.category2 && goalOrder.includes(d.category2.trim())
+  );
+
+  map.on('load', () => {
+    stylizeBasemap();
+    addNeighbourhoodLayers(geojson);
+    addProjectLayers();
+    attachMapEvents();
+    buildFlower(allProjects);
+    buildChart(allProjects);
+  });
+
+}).catch(err => {
+  console.error('Data load error:', err);
+  document.getElementById('panel-info').innerHTML =
+    '<p style="font-size:11px;color:#c05050;padding:10px 0">Could not load data.</p>';
+});
+
+function stylizeBasemap() {
+  if (map.getLayer('water')) map.setPaintProperty('water', 'fill-color', '#C5E4F5');
+}
+
+function addNeighbourhoodLayers(geojson) {
+  map.addSource('neighbourhoods', { type: 'geojson', data: geojson });
+  map.addLayer({ id: 'neighbourhood-fill', type: 'fill', source: 'neighbourhoods',
+    paint: { 'fill-color': '#B8DCF0', 'fill-opacity': 0.28 } });
+  map.addLayer({ id: 'neighbourhood-line', type: 'line', source: 'neighbourhoods',
+    paint: { 'line-color': '#6BAECF', 'line-width': 0.9, 'line-opacity': 0.55 } });
+}
+
+function addProjectLayers() {
+  const features = allProjects.map(d => ({
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [parseFloat(d.longitude), parseFloat(d.latitude)] },
+    properties: {
+      name: d.name,
+      category1: (d.category1 || '').trim(),
+      category2: (d.category2 || '').trim(),
+      address:   (d.address || '').trim(),
+      url:       (d.url || '').trim(),
+      color: goalColors[(d.category2 || '').trim()] || '#B0C8D8'
+    }
+  }));
+
+  map.addSource('projects', { type: 'geojson', data: { type: 'FeatureCollection', features } });
+  map.addLayer({ id: 'projects-glow', type: 'circle', source: 'projects',
+    paint: { 'circle-radius': 16, 'circle-color': ['get', 'color'],
+             'circle-opacity': 0, 'circle-blur': 0.7, 'circle-stroke-width': 0,
+             'circle-pitch-alignment': 'map' } });
+  map.addLayer({ id: 'projects-dots', type: 'circle', source: 'projects',
+    paint: { 'circle-radius': 5.5, 'circle-color': ['get', 'color'],
+             'circle-opacity': 0.82, 'circle-stroke-width': 1.5,
+             'circle-stroke-color': 'rgba(255,255,255,0.85)',
+             'circle-stroke-opacity': 0.85, 'circle-pitch-alignment': 'map' } });
+}
+
+function attachMapEvents() {
+  const tooltip = document.getElementById('tooltip');
+  map.on('mouseenter', 'projects-dots', (e) => {
+    map.getCanvas().style.cursor = 'pointer';
+    const p = e.features[0].properties;
+    tooltip.style.display = 'block';
+    tooltip.innerHTML = `
+      <div class="tt-name"><span class="tt-dot" style="background:${p.color}"></span><span>${p.name}</span></div>
+      <div class="tt-cat">${goalNames[p.category2] || p.category2}</div>
+      ${p.address ? `<div class="tt-addr">${p.address}</div>` : ''}`;
+  });
+  map.on('mousemove', 'projects-dots', (e) => {
+    tooltip.style.left = (e.point.x + 14) + 'px';
+    tooltip.style.top  = (e.point.y - 12) + 'px';
+  });
+  map.on('mouseleave', 'projects-dots', () => {
+    map.getCanvas().style.cursor = '';
+    tooltip.style.display = 'none';
+  });
+  map.on('click', 'projects-dots', (e) => {
+    e.originalEvent.stopPropagation();
+    const p = e.features[0].properties;
+    if (p.url) window.open(p.url, '_blank');
+  });
+}
+
+/* ══════════════════════════════════════════════════════
+   SELECTION STATE
+══════════════════════════════════════════════════════ */
+let currentCategory = null;
+let flowerSelectFn  = null;
+
+function selectCategory(category, source) {
+  currentCategory = category;
+  if (flowerSelectFn) flowerSelectFn(category);
+  filterMap(category);
+  updateChart(category);
+  if (source === 'user') pushFilterToTableau(category);
+}
+
+/* ══════════════════════════════════════════════════════
+   MAP FILTER
+══════════════════════════════════════════════════════ */
+function filterMap(category) {
+  const resetHint = document.getElementById('reset-hint');
+  if (!category) {
+    resetHint.style.display = 'none';
+    map.setPaintProperty('projects-dots', 'circle-opacity', 0.82);
+    map.setPaintProperty('projects-dots', 'circle-radius', 5.5);
+    map.setPaintProperty('projects-dots', 'circle-stroke-width', 1.5);
+    map.setPaintProperty('projects-glow', 'circle-opacity', 0);
+    map.setPaintProperty('neighbourhood-fill', 'fill-opacity', 0.28);
+    map.flyTo({ center: [-123.128, 49.249], zoom: 11.3, duration: 900, essential: true });
+  } else {
+    resetHint.style.display = 'block';
+    map.setPaintProperty('projects-dots', 'circle-opacity',
+      ['case', ['==', ['get', 'category2'], category], 1, 0.08]);
+    map.setPaintProperty('projects-dots', 'circle-radius',
+      ['case', ['==', ['get', 'category2'], category], 8.5, 4]);
+    map.setPaintProperty('projects-dots', 'circle-stroke-width',
+      ['case', ['==', ['get', 'category2'], category], 2, 0]);
+    map.setPaintProperty('projects-glow', 'circle-opacity',
+      ['case', ['==', ['get', 'category2'], category], 0.22, 0]);
+    map.setPaintProperty('neighbourhood-fill', 'fill-opacity', 0.15);
+    const pts = allProjects.filter(d => d.category2.trim() === category);
+    if (pts.length) {
+      const lngs = pts.map(d => parseFloat(d.longitude));
+      const lats  = pts.map(d => parseFloat(d.latitude));
+      map.fitBounds(
+        [[Math.min(...lngs) - 0.01, Math.min(...lats) - 0.008],
+         [Math.max(...lngs) + 0.01, Math.max(...lats) + 0.008]],
+        { padding: { top: 80, bottom: 180, left: 430, right: 60 }, duration: 900, essential: true }
+      );
+    }
+  }
+}
+
+/* ══════════════════════════════════════════════════════
+   BAR CHART
+══════════════════════════════════════════════════════ */
+const CHART_M    = { top: 6, right: 36, bottom: 26, left: 138 };
+const CHART_W    = 390 - 40 - CHART_M.left - CHART_M.right;
+const BG_BAR_H   = 11;   // background bar (total)
+const FG_BAR_H   = 6;    // foreground bar (category) — thinner, centered
+const FG_OFFSET  = (BG_BAR_H - FG_BAR_H) / 2;
+const BAR_STEP   = 17;
+const MAX_BARS   = 14;
+const DEFAULT_COLOR = '#B8DCF0';
+
+let neighCounts  = {};
+let chartG, chartXScale, chartXAxis, chartGridG;
+
+function buildNeighCounts(data) {
+  const counts = {};
+  data.forEach(d => {
+    const area = (d.geo_local_area || 'Unknown').trim();
+    const cat  = d.category2.trim();
+    if (!counts[area]) counts[area] = { total: 0 };
+    counts[area].total++;
+    counts[area][cat] = (counts[area][cat] || 0) + 1;
+  });
+  return counts;
+}
+
+function buildChart(data) {
+  neighCounts = buildNeighCounts(data);
+
+  const svg = d3.select('#chart-svg');
+  svg.attr('width', CHART_M.left + CHART_W + CHART_M.right);
+
+  chartG = svg.append('g').attr('transform', `translate(${CHART_M.left},${CHART_M.top})`);
+  chartXScale = d3.scaleLinear().range([0, CHART_W]);
+
+  chartGridG = chartG.append('g').attr('class', 'grid');
+  chartXAxis = chartG.append('g').attr('class', 'x-axis');
+  chartG.append('g').attr('class', 'labels-g');
+  chartG.append('g').attr('class', 'bars-g');   // bg bars, then fg bars
+  chartG.append('g').attr('class', 'ref-g');    // reference line
+  chartG.append('g').attr('class', 'vals-g');   // value labels
+
+  updateChart(null);
+}
+
+function updateChart(category) {
+  if (!chartG) return;
+
+  // Always sort by total; show top MAX_BARS
+  const rows = Object.entries(neighCounts)
+    .map(([name, c]) => ({
+      name,
+      total:  c.total,
+      catVal: category ? (c[category] || 0) : 0
+    }))
+    .sort((a,b) => b.total - a.total)
+    .slice(0, MAX_BARS);
+
+  const n      = rows.length;
+  const innerH = n * BAR_STEP;
+  const svgH   = CHART_M.top + innerH + CHART_M.bottom;
+
+  document.getElementById('chart-title').textContent = category ? goalNames[category] : '';
+
+  const svg  = d3.select('#chart-svg');
+  const wrap = document.getElementById('chart-wrap');
+  wrap.style.height = svgH + 'px';
+  svg.transition().duration(350).attr('height', svgH);
+
+  // x scale always based on total max — keeps background bars stable
+  const xMaxTotal = d3.max(rows, d => d.total) || 1;
+  chartXScale.domain([0, xMaxTotal]);
+
+  // ── Grid ──
+  const ticks = chartXScale.ticks(4);
+  const gridSel = chartGridG.selectAll('line.grid-line').data(ticks);
+  gridSel.enter().append('line').attr('class', 'grid-line')
+    .merge(gridSel).transition().duration(350)
+    .attr('x1', d => chartXScale(d)).attr('x2', d => chartXScale(d))
+    .attr('y1', 0).attr('y2', innerH);
+  gridSel.exit().remove();
+
+  // ── X axis ──
+  chartXAxis.transition().duration(350)
+    .attr('transform', `translate(0,${innerH})`)
+    .call(d3.axisBottom(chartXScale).ticks(4).tickSize(3).tickFormat(d3.format('d')));
+  chartXAxis.selectAll('text').attr('class', 'axis-tick').attr('dy', '1.1em');
+  chartXAxis.select('.domain').attr('stroke', '#D4E8F2');
+  chartXAxis.selectAll('.tick line').attr('stroke', '#D4E8F2');
+
+  const barsG = chartG.select('.bars-g');
+
+  // ── Background bars (total) ──
+  const bgSel = barsG.selectAll('rect.bar-bg').data(rows, d => d.name);
+  bgSel.exit().transition().duration(220).attr('opacity', 0).remove();
+  bgSel.enter().append('rect').attr('class', 'bar-bg')
+    .attr('x', 0).attr('y', (d,i) => i * BAR_STEP)
+    .attr('height', BG_BAR_H).attr('width', 0).attr('rx', 5)
+    .attr('fill', DEFAULT_COLOR).attr('opacity', 0)
+  .merge(bgSel)
+    .transition().duration(400).ease(d3.easeCubicOut)
+    .attr('y', (d,i) => i * BAR_STEP)
+    .attr('width', d => Math.max(chartXScale(d.total), 0))
+    .attr('height', BG_BAR_H).attr('rx', 5).attr('fill', DEFAULT_COLOR)
+    .attr('opacity', category ? 0.4 : 1);  // dim when a category is active
+
+  // ── Foreground bars (category count, thinner, centred) ──
+  const fgSel = barsG.selectAll('rect.bar-fg').data(rows, d => d.name);
+  fgSel.exit().transition().duration(220).attr('opacity', 0).attr('width', 0).remove();
+  fgSel.enter().append('rect').attr('class', 'bar-fg')
+    .attr('x', 0).attr('y', (d,i) => i * BAR_STEP + FG_OFFSET)
+    .attr('height', FG_BAR_H).attr('width', 0).attr('rx', 3)
+    .attr('fill', category ? goalColors[category] : 'transparent').attr('opacity', 0)
+  .merge(fgSel)
+    .transition().duration(420).ease(d3.easeCubicOut)
+    .attr('y', (d,i) => i * BAR_STEP + FG_OFFSET)
+    .attr('width', d => category && d.catVal > 0 ? Math.max(chartXScale(d.catVal), 4) : 0)
+    .attr('height', FG_BAR_H).attr('rx', 3)
+    .attr('fill', category ? goalColors[category] : 'transparent')
+    .attr('opacity', category ? 1 : 0);
+
+  // ── Reference line at max category value ──
+  const maxCatVal = category ? (d3.max(rows, d => d.catVal) || 0) : 0;
+  const refData   = category && maxCatVal > 0 ? [maxCatVal] : [];
+  const refG      = chartG.select('.ref-g');
+
+  const refSel = refG.selectAll('line.ref-line').data(refData);
+  refSel.exit().transition().duration(200).attr('opacity', 0).remove();
+  refSel.enter().append('line').attr('class', 'ref-line')
+    .attr('y1', 0).attr('y2', innerH).attr('opacity', 0)
+  .merge(refSel)
+    .transition().duration(420)
+    .attr('x1', d => chartXScale(d)).attr('x2', d => chartXScale(d))
+    .attr('y1', 0).attr('y2', innerH)
+    .attr('stroke', '#4A9BBF').attr('stroke-width', 1)
+    .attr('stroke-dasharray', '3,3').attr('opacity', 0.65);
+
+  // ── Labels (neighbourhood names) ──
+  const labelsG = chartG.select('.labels-g');
+  const labelSel = labelsG.selectAll('text.bar-label').data(rows, d => d.name);
+  labelSel.exit().transition().duration(220).attr('opacity', 0).remove();
+  labelSel.enter().append('text').attr('class', 'bar-label')
+    .attr('x', -10).attr('y', (d,i) => i * BAR_STEP + BG_BAR_H / 2)
+    .attr('dy', '0.35em').attr('text-anchor', 'end').attr('opacity', 0)
+  .merge(labelSel)
+    .text(d => d.name.length > 20 ? d.name.slice(0,18) + '…' : d.name)
+    .transition().duration(400)
+    .attr('y', (d,i) => i * BAR_STEP + BG_BAR_H / 2).attr('opacity', 1);
+
+  // ── Value labels: total at end of bg bar; category count near end of fg bar ──
+  const valsG = chartG.select('.vals-g');
+
+  // Total label
+  const totSel = valsG.selectAll('text.val-total').data(rows, d => d.name);
+  totSel.exit().transition().duration(220).attr('opacity', 0).remove();
+  totSel.enter().append('text').attr('class', 'bar-val val-total')
+    .attr('dy', '0.35em').attr('opacity', 0)
+  .merge(totSel)
+    .transition().duration(400).ease(d3.easeCubicOut)
+    .attr('x', d => chartXScale(d.total) + 5)
+    .attr('y', (d,i) => i * BAR_STEP + BG_BAR_H / 2)
+    .text(d => d.total)
+    .attr('opacity', category ? 0.35 : 1);  // fade total label when category active
+
+  // Category count label (only when category selected and catVal > 0)
+  const catLabelData = category ? rows.filter(d => d.catVal > 0) : [];
+  const catSel = valsG.selectAll('text.val-cat').data(catLabelData, d => d.name);
+  catSel.exit().transition().duration(220).attr('opacity', 0).remove();
+  catSel.enter().append('text').attr('class', 'bar-val val-cat')
+    .attr('dy', '0.35em').attr('text-anchor', 'start').attr('opacity', 0)
+    .attr('fill', category ? goalColors[category] : 'transparent')
+  .merge(catSel)
+    .transition().duration(420).ease(d3.easeCubicOut)
+    .attr('x', d => chartXScale(d.catVal) + 5)
+    .attr('y', (d,i) => {
+      const rowIdx = rows.findIndex(r => r.name === d.name);
+      return rowIdx * BAR_STEP + BG_BAR_H / 2;
+    })
+    .text(d => d.catVal)
+    .attr('fill', category ? goalColors[category] : 'transparent')
+    .attr('opacity', 1);
+}
+
+/* ══════════════════════════════════════════════════════
+   FLOWER
+══════════════════════════════════════════════════════ */
+function buildFlower(data) {
+  const goalMap = {}, typeMap = {};
+  data.forEach(d => {
+    const goal = d.category2.trim();
+    const type = (d.category1 || '').trim();
+    goalMap[goal] = (goalMap[goal] || 0) + 1;
+    if (!typeMap[goal]) typeMap[goal] = {};
+    if (type) typeMap[goal][type] = (typeMap[goal][type] || 0) + 1;
+  });
+
+  const goals = goalOrder.filter(g => goalMap[g]).map(g => ({
+    key: g, name: goalNames[g], count: goalMap[g],
+    color: goalColors[g],
+    types: Object.entries(typeMap[g] || {}).sort((a,b) => b[1]-a[1])
+  }));
+
+  const total = goals.reduce((s,g) => s + g.count, 0);
+  const N = goals.length;
+  const cx = 120, cy = 120, L = 88, W = 26, SWIRL = 18;
+
+  const leafPath = () =>
+    `M 0 0 C ${W*.8} ${-L*.1}, ${W} ${-L*.35}, ${W*.55} ${-L*.6}
+     C ${W*.2} ${-L*.82}, 0 ${-L*.95}, 0 ${-L}
+     C 0 ${-L*.95}, ${-W*.2} ${-L*.82}, ${-W*.55} ${-L*.6}
+     C ${-W} ${-L*.35}, ${-W*.8} ${-L*.1}, 0 0 Z`;
+
+  const midrib = () => `M 0 -3 Q 0 ${-L*.5} 0 ${-L*.88}`;
+
+  const svg = d3.select('#svg-wrap').append('svg')
+    .attr('width', 240).attr('height', 240).attr('viewBox', '0 0 240 240')
+    .style('cursor', 'pointer').style('overflow', 'visible');
+
+  let selectedIdx = null;
+  const groups = [];
+  const baseOpacity = i => selectedIdx === null ? 0.86 : (i === selectedIdx ? 1 : 0.1);
+
+  goals.forEach((g, i) => {
+    const angle = (i / N) * 2 * Math.PI - Math.PI / 2;
+    const deg   = angle * 180 / Math.PI + 90 + SWIRL;
+
+    const grp = svg.append('g')
+      .attr('transform', `translate(${cx},${cy}) rotate(${deg})`)
+      .attr('cursor', 'pointer').attr('opacity', 0.86);
+
+    grp.append('path').attr('d', leafPath())
+      .attr('fill', g.color).attr('stroke', 'rgba(255,255,255,0.55)').attr('stroke-width', 1);
+    grp.append('path').attr('d', midrib())
+      .attr('fill', 'none').attr('stroke', 'rgba(255,255,255,0.32)')
+      .attr('stroke-width', 0.8).attr('stroke-linecap', 'round');
+
+    grp
+      .on('mouseenter', function() {
+        d3.select(this).attr('opacity', i === selectedIdx ? 1 : (selectedIdx === null ? 1 : 0.28));
+      })
+      .on('mouseleave', function() { d3.select(this).attr('opacity', baseOpacity(i)); })
+      .on('click', function(event) {
+        event.stopPropagation();
+        selectCategory(selectedIdx === i ? null : g.key, 'user');
+      });
+
+    groups.push({ grp, i, deg });
+  });
+
+  const cg = svg.append('g').style('pointer-events', 'none');
+  cg.append('circle').attr('cx', cx).attr('cy', cy).attr('r', 17)
+    .attr('fill', 'white').attr('stroke', '#C0D8E8').attr('stroke-width', 0.6);
+  cg.append('text').attr('x', cx).attr('y', cy - 5)
+    .attr('text-anchor', 'middle').attr('dominant-baseline', 'central')
+    .attr('font-size', 12).attr('font-weight', 400).attr('fill', '#1A3347').text(total);
+  cg.append('text').attr('x', cx).attr('y', cy + 9)
+    .attr('text-anchor', 'middle').attr('font-size', 6.5)
+    .attr('fill', '#7AAFC8').attr('letter-spacing', '0.8').text('PROJECTS');
+
+  flowerSelectFn = (category) => {
+    if (category === null) {
+      selectedIdx = null;
+      groups.forEach(({grp, deg}) =>
+        grp.attr('opacity', 0.86).attr('transform', `translate(${cx},${cy}) rotate(${deg})`));
+      document.getElementById('panel-info').innerHTML =
+        '<p class="p-hint">Click a petal<br>to explore projects</p>';
+    } else {
+      const idx = goals.findIndex(g => g.key === category);
+      selectedIdx = idx;
+      groups.forEach(({grp, i}) => grp.attr('opacity', i === idx ? 1 : 0.1));
+      if (idx >= 0) {
+        const g = goals[idx];
+        const pct  = Math.round((g.count / total) * 100);
+        const rows = g.types.map(([t, n]) =>
+          `<div class="p-type">${t} · <strong>${n}</strong></div>`).join('');
+        document.getElementById('panel-info').innerHTML = `
+          <p class="p-goal">${g.name}</p>
+          <p class="p-count">${g.count}</p>
+          <p class="p-sub">${pct}% of total</p>
+          <hr class="p-hr"><div class="p-types">${rows}</div>`;
+      }
+    }
+  };
+
+  document.addEventListener('click', (e) => {
+    if (!document.getElementById('flower-panel').contains(e.target) &&
+        !e.target.closest('#reset-hint') &&
+        !e.target.closest('#config-overlay') &&
+        !e.target.closest('#chart-panel')) {
+      if (currentCategory !== null) selectCategory(null, 'user');
+    }
+  });
+
+  document.getElementById('reset-hint').addEventListener('click', (e) => {
+    e.stopPropagation();
+    selectCategory(null, 'user');
+  });
+}
+
+/* ══════════════════════════════════════════════════════
+   TABLEAU INTEGRATION
+══════════════════════════════════════════════════════ */
+let tableauWS    = null;
+let tableauField = null;
+let suppressSync = false;
+
+(function loadTableauAPI() {
+  if (window.self === window.top) return;
+  const s = document.createElement('script');
+  s.src = 'https://tableau.github.io/extensions-api/lib/tableau.extensions.1.latest.js';
+  s.onload = () => initTableau();
+  s.onerror = () => console.info('Tableau Extensions API not available.');
+  document.head.appendChild(s);
+})();
+
+async function initTableau() {
+  try {
+    await tableau.extensions.initializeAsync({ configure: openConfigPanel });
+    const settings = tableau.extensions.settings.getAll();
+    if (settings.worksheetName && settings.fieldName) {
+      connectWorksheet(settings.worksheetName, settings.fieldName);
+    } else {
+      openConfigPanel();
+    }
+  } catch (e) { console.warn('Tableau initialization failed:', e); }
+}
+
+function connectWorksheet(wsName, fieldName) {
+  try {
+    const ws = tableau.extensions.dashboardContent.dashboard.worksheets.find(w => w.name === wsName);
+    if (!ws) { console.warn(`Worksheet "${wsName}" not found.`); return; }
+    tableauWS    = ws;
+    tableauField = fieldName;
+    ws.addEventListener(tableau.TableauEventType.FilterChanged, onTableauFilterChanged);
+    syncFromTableau(ws, fieldName);
+    showConnectionBadge(wsName);
+  } catch (e) { console.warn('Could not connect to worksheet:', e); }
+}
+
+async function syncFromTableau(ws, fieldName) {
+  try {
+    const filters = await ws.getFiltersAsync();
+    const f = filters.find(fi => fi.fieldName === fieldName);
+    if (f && !f.isAllSelected && f.appliedValues?.length === 1) {
+      const val = f.appliedValues[0].value;
+      if (goalOrder.includes(val)) selectCategory(val, 'tableau');
+    }
+  } catch (e) { console.warn('Could not read initial filters:', e); }
+}
+
+async function onTableauFilterChanged(event) {
+  if (suppressSync) return;
+  try {
+    const filter = await event.getFilterAsync();
+    if (filter.fieldName !== tableauField) return;
+    if (filter.isAllSelected || !filter.appliedValues?.length) {
+      selectCategory(null, 'tableau');
+    } else if (filter.appliedValues.length === 1) {
+      const val = filter.appliedValues[0].value;
+      selectCategory(goalOrder.includes(val) ? val : null, 'tableau');
+    }
+  } catch (e) { console.warn('Filter change handler error:', e); }
+}
+
+async function pushFilterToTableau(category) {
+  if (!tableauWS || !tableauField) return;
+  suppressSync = true;
+  try {
+    if (category) {
+      await tableauWS.applyFilterAsync(tableauField, [category], tableau.FilterUpdateType.Replace);
+    } else {
+      await tableauWS.applyFilterAsync(tableauField, [], tableau.FilterUpdateType.All);
+    }
+  } catch (e) { console.warn('Could not apply Tableau filter:', e); }
+  finally { setTimeout(() => { suppressSync = false; }, 400); }
+}
+
+function openConfigPanel() {
+  const overlay = document.getElementById('config-overlay');
+  const select  = document.getElementById('ws-select');
+  try {
+    const sheets = tableau.extensions.dashboardContent.dashboard.worksheets;
+    select.innerHTML = sheets.map(ws => `<option value="${ws.name}">${ws.name}</option>`).join('');
+    const saved = tableau.extensions.settings.get('worksheetName');
+    if (saved) select.value = saved;
+  } catch (e) {
+    select.innerHTML = '<option value="">— could not load worksheets —</option>';
+  }
+  const savedField = tableau.extensions.settings.get?.('fieldName');
+  if (savedField) document.getElementById('field-input').value = savedField;
+  overlay.classList.add('visible');
+  document.getElementById('config-error').style.display = 'none';
+}
+
+document.getElementById('config-save').addEventListener('click', async () => {
+  const wsName    = document.getElementById('ws-select').value;
+  const fieldName = document.getElementById('field-input').value.trim();
+  const errEl     = document.getElementById('config-error');
+  if (!wsName || !fieldName) {
+    errEl.textContent = 'Please select a worksheet and enter a field name.';
+    errEl.style.display = 'block'; return;
+  }
+  try {
+    tableau.extensions.settings.set('worksheetName', wsName);
+    tableau.extensions.settings.set('fieldName', fieldName);
+    await tableau.extensions.settings.saveAsync();
+  } catch (e) { console.warn('Could not save settings:', e); }
+  document.getElementById('config-overlay').classList.remove('visible');
+  connectWorksheet(wsName, fieldName);
+});
+
+document.getElementById('config-cancel').addEventListener('click', () => {
+  document.getElementById('config-overlay').classList.remove('visible');
+});
+
+document.getElementById('config-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (typeof tableau !== 'undefined') {
+    openConfigPanel();
+  } else {
+    alert('This button connects the map to Tableau.\nOpen the file as a Tableau Extension to use it.');
+  }
+});
+
+function showConnectionBadge(wsName) {
+  const badge = document.getElementById('connection-badge');
+  const btn   = document.getElementById('config-btn');
+  badge.textContent = `● ${wsName}`;
+  badge.style.display = 'inline-block';
+  btn.classList.add('connected');
+  btn.title = `Connected to "${wsName}" — click to reconfigure`;
+}
+</script>
+</body>
+</html>
