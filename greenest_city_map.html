@@ -26,12 +26,12 @@
 
     /* ─── Shared glass panel ─── */
     .glass-panel {
-      background: rgba(255,255,255,0.90);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      background: rgba(255,255,255,0.78);
+      backdrop-filter: blur(26px) saturate(1.5);
+      -webkit-backdrop-filter: blur(26px) saturate(1.5);
       border-radius: 22px;
-      box-shadow: 0 8px 36px rgba(80,150,200,0.16), 0 2px 8px rgba(0,0,0,0.07);
-      border: 1px solid rgba(185,215,235,0.55);
+      box-shadow: 0 8px 36px rgba(80,150,200,0.10), 0 2px 8px rgba(0,0,0,0.04);
+      border: 1px solid rgba(255,255,255,0.68);
       position: absolute;
       z-index: 10;
     }
@@ -40,13 +40,13 @@
     #title-bar {
       top: 26px; left: 50%;
       transform: translateX(-50%);
-      background: rgba(255,255,255,0.88);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
+      background: rgba(255,255,255,0.44);
+      backdrop-filter: blur(26px) saturate(1.5);
+      -webkit-backdrop-filter: blur(26px) saturate(1.5);
       border-radius: 100px;
       padding: 9px 22px 9px 26px;
-      box-shadow: 0 4px 20px rgba(80,140,190,0.14), 0 1px 4px rgba(0,0,0,0.06);
-      border: 1px solid rgba(185,215,235,0.6);
+      box-shadow: 0 4px 20px rgba(80,140,190,0.08), 0 1px 4px rgba(0,0,0,0.04);
+      border: 1px solid rgba(255,255,255,0.68);
       z-index: 10; white-space: nowrap;
       position: absolute;
       display: flex; align-items: center; gap: 12px;
@@ -155,7 +155,7 @@
     /* ─── Config overlay ─── */
     #config-overlay {
       position: absolute; inset: 0;
-      background: rgba(220,235,245,0.45);
+      background: rgba(220,235,245,0.35);
       backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
       z-index: 30; display: none;
       align-items: center; justify-content: center;
@@ -262,7 +262,7 @@
 /* ══════════════════════════════════════════════════════
    CONSTANTS
 ══════════════════════════════════════════════════════ */
-const MAPBOX_TOKEN = 'YOUR_MAPBOX_TOKEN';
+const MAPBOX_TOKEN = 'pk.eyJ1IjoiY2FtaWxsYS1zY2FuZG9sYSIsImEiOiJjbW82MWczcWsxYmg4Mnlxd2Q4ZTFlMGo5In0.dqXeBzpxxmAt3_BqPr8A8w';
 
 const goalColors = {
   "Local-Food":           "#6083FF",
@@ -366,14 +366,18 @@ function addProjectLayers() {
 
   map.addSource('projects', { type: 'geojson', data: { type: 'FeatureCollection', features } });
   map.addLayer({ id: 'projects-glow', type: 'circle', source: 'projects',
-    paint: { 'circle-radius': 16, 'circle-color': ['get', 'color'],
+    paint: { 'circle-radius': 9, 'circle-color': ['get', 'color'],
+             'circle-opacity': 0, 'circle-blur': 0.8, 'circle-stroke-width': 0,
+             'circle-pitch-alignment': 'map' } });
+  map.addLayer({ id: 'projects-border-glow', type: 'circle', source: 'projects',
+    paint: { 'circle-radius': 4.5, 'circle-color': ['get', 'color'],
              'circle-opacity': 0, 'circle-blur': 0.7, 'circle-stroke-width': 0,
              'circle-pitch-alignment': 'map' } });
   map.addLayer({ id: 'projects-dots', type: 'circle', source: 'projects',
-    paint: { 'circle-radius': 5.5, 'circle-color': ['get', 'color'],
-             'circle-opacity': 0.82, 'circle-stroke-width': 1.5,
-             'circle-stroke-color': 'rgba(255,255,255,0.85)',
-             'circle-stroke-opacity': 0.85, 'circle-pitch-alignment': 'map' } });
+    paint: { 'circle-radius': 2.5, 'circle-color': ['get', 'color'],
+             'circle-opacity': 0.88, 'circle-stroke-width': 1.2,
+             'circle-stroke-color': 'rgba(255,255,255,0.9)',
+             'circle-stroke-opacity': 0.9, 'circle-pitch-alignment': 'map' } });
 }
 
 function attachMapEvents() {
@@ -394,11 +398,6 @@ function attachMapEvents() {
   map.on('mouseleave', 'projects-dots', () => {
     map.getCanvas().style.cursor = '';
     tooltip.style.display = 'none';
-  });
-  map.on('click', 'projects-dots', (e) => {
-    e.originalEvent.stopPropagation();
-    const p = e.features[0].properties;
-    if (p.url) window.open(p.url, '_blank');
   });
 }
 
@@ -424,9 +423,10 @@ function filterMap(category) {
   if (!category) {
     resetHint.style.display = 'none';
     map.setPaintProperty('projects-dots', 'circle-opacity', 0.82);
-    map.setPaintProperty('projects-dots', 'circle-radius', 5.5);
-    map.setPaintProperty('projects-dots', 'circle-stroke-width', 1.5);
+    map.setPaintProperty('projects-dots', 'circle-radius', 2.5);
+    map.setPaintProperty('projects-dots', 'circle-stroke-width', 1.2);
     map.setPaintProperty('projects-glow', 'circle-opacity', 0);
+    map.setPaintProperty('projects-border-glow', 'circle-opacity', 0.22);
     map.setPaintProperty('neighbourhood-fill', 'fill-opacity', 0.28);
     map.flyTo({ center: [-123.128, 49.249], zoom: 11.3, duration: 900, essential: true });
   } else {
@@ -434,11 +434,13 @@ function filterMap(category) {
     map.setPaintProperty('projects-dots', 'circle-opacity',
       ['case', ['==', ['get', 'category2'], category], 1, 0.08]);
     map.setPaintProperty('projects-dots', 'circle-radius',
-      ['case', ['==', ['get', 'category2'], category], 8.5, 4]);
+      ['case', ['==', ['get', 'category2'], category], 4.5, 2.5]);
     map.setPaintProperty('projects-dots', 'circle-stroke-width',
       ['case', ['==', ['get', 'category2'], category], 2, 0]);
     map.setPaintProperty('projects-glow', 'circle-opacity',
-      ['case', ['==', ['get', 'category2'], category], 0.22, 0]);
+      ['case', ['==', ['get', 'category2'], category], 0.28, 0]);
+    map.setPaintProperty('projects-border-glow', 'circle-opacity',
+      ['case', ['==', ['get', 'category2'], category], 0.35, 0.05]);
     map.setPaintProperty('neighbourhood-fill', 'fill-opacity', 0.15);
     const pts = allProjects.filter(d => d.category2.trim() === category);
     if (pts.length) {
@@ -674,7 +676,7 @@ function buildFlower(data) {
 
   let selectedIdx = null;
   const groups = [];
-  const baseOpacity = i => selectedIdx === null ? 0.86 : (i === selectedIdx ? 1 : 0.1);
+  const baseOpacity = i => selectedIdx === null ? 0.86 : (i === selectedIdx ? 1 : 0.35);
 
   goals.forEach((g, i) => {
     const angle = (i / N) * 2 * Math.PI - Math.PI / 2;
@@ -692,9 +694,11 @@ function buildFlower(data) {
 
     grp
       .on('mouseenter', function() {
-        d3.select(this).attr('opacity', i === selectedIdx ? 1 : (selectedIdx === null ? 1 : 0.28));
+        groups.forEach(({grp, i: j}) => grp.attr('opacity', j === i ? 1 : 0.18));
       })
-      .on('mouseleave', function() { d3.select(this).attr('opacity', baseOpacity(i)); })
+      .on('mouseleave', function() {
+        groups.forEach(({grp, i: j}) => grp.attr('opacity', baseOpacity(j)));
+      })
       .on('click', function(event) {
         event.stopPropagation();
         selectCategory(selectedIdx === i ? null : g.key, 'user');
@@ -723,7 +727,7 @@ function buildFlower(data) {
     } else {
       const idx = goals.findIndex(g => g.key === category);
       selectedIdx = idx;
-      groups.forEach(({grp, i}) => grp.attr('opacity', i === idx ? 1 : 0.1));
+      groups.forEach(({grp, i}) => grp.attr('opacity', i === idx ? 1 : 0.35));
       if (idx >= 0) {
         const g = goals[idx];
         const pct  = Math.round((g.count / total) * 100);
