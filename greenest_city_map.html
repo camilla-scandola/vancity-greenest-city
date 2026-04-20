@@ -91,9 +91,14 @@
     }
 
     #chart-wrap {
-      overflow: hidden;
+      overflow-y: auto;
+      overflow-x: hidden;
+      max-height: 238px;
       transition: height 0.35s cubic-bezier(0.4,0,0.2,1);
     }
+    #chart-wrap::-webkit-scrollbar { width: 4px; }
+    #chart-wrap::-webkit-scrollbar-track { background: transparent; }
+    #chart-wrap::-webkit-scrollbar-thumb { background: rgba(110,174,207,0.4); border-radius: 4px; }
 
     /* SVG text styles */
     .bar-label { font-size: 10px; fill: #4E7A95; font-family: inherit; }
@@ -229,7 +234,7 @@
 <div id="flower-panel" class="glass-panel">
   <div id="svg-wrap"></div>
   <div id="panel-info">
-    <p class="p-hint">Click a petal<br>to explore projects</p>
+    <p class="p-hint">Vancity<br>Greenest City Projects</p>
   </div>
 </div>
 
@@ -464,7 +469,7 @@ const BG_BAR_H   = 11;   // background bar (total)
 const FG_BAR_H   = 6;    // foreground bar (category) — thinner, centered
 const FG_OFFSET  = (BG_BAR_H - FG_BAR_H) / 2;
 const BAR_STEP   = 17;
-const MAX_BARS   = 14;
+const MAX_BARS   = 999;
 const DEFAULT_COLOR = '#B8DCF0';
 
 let neighCounts  = {};
@@ -723,7 +728,7 @@ function buildFlower(data) {
       groups.forEach(({grp, deg}) =>
         grp.attr('opacity', 0.86).attr('transform', `translate(${cx},${cy}) rotate(${deg})`));
       document.getElementById('panel-info').innerHTML =
-        '<p class="p-hint">Click a petal<br>to explore projects</p>';
+        '<p class="p-hint">Vancity<br>Greenest City Projects</p>';
     } else {
       const idx = goals.findIndex(g => g.key === category);
       selectedIdx = idx;
