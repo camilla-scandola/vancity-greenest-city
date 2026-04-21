@@ -210,6 +210,42 @@
     .btn-connect:hover { opacity: 0.88; }
     .btn-connect:disabled { opacity: 0.4; cursor: default; }
     #config-error { font-size: 10.5px; color: #c05050; margin-top: 10px; display: none; text-align: center; }
+
+    /* ─── Mobile layout ─── */
+    @media (max-width: 640px) {
+      body { height: auto; overflow: auto; display: flex; flex-direction: column; }
+
+      #map { position: relative; inset: auto; height: 55vh; width: 100%; flex-shrink: 0; }
+
+      #title-bar {
+        position: relative; top: auto; left: auto; right: auto;
+        border-radius: 0; width: 100%;
+        padding: 10px 16px;
+      }
+
+      .glass-panel {
+        position: relative; top: auto; left: auto; right: auto; bottom: auto;
+        border-radius: 0; width: 100%; margin: 0;
+        border-left: none; border-right: none; border-radius: 0;
+      }
+
+      #chart-panel { order: 2; padding: 16px 16px 12px; }
+      #chart-wrap { max-height: none; overflow: visible; }
+
+      #flower-panel {
+        order: 3;
+        flex-direction: row; align-items: center;
+        padding: 20px 24px; gap: 24px;
+      }
+
+      #panel-info { width: auto; flex: 1; min-height: auto; }
+
+      #svg-wrap svg { width: 180px !important; height: 180px !important; }
+
+      #reset-hint { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); }
+
+      #config-overlay { position: fixed; }
+    }
   </style>
 </head>
 <body>
