@@ -41,26 +41,6 @@
       letter-spacing: 0.3px;
       flex: 1;
     }
-    #connection-badge {
-      display: none;
-      font-size: 10px;
-      color: #4CAACC;
-      background: rgba(200,240,250,0.85);
-      border: 1px solid rgba(130,210,235,0.5);
-      border-radius: 100px;
-      padding: 2px 10px;
-      white-space: nowrap;
-    }
-    #config-btn {
-      width: 26px; height: 26px; border-radius: 50%;
-      border: 1px solid rgba(185,215,235,0.8);
-      background: rgba(240,248,253,0.9);
-      cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 13px; color: #7AAFC8;
-      flex-shrink: 0;
-    }
-    #config-btn.connected { color: #4CAACC; border-color: #7DD4ED; background: rgba(200,240,250,0.9); }
 
     /* ─── Map ─── */
     #map-wrap {
@@ -192,62 +172,6 @@
     }
     #reset-hint:active { color: #2B4A62; background: rgba(255,255,255,1); }
 
-    /* ─── Config overlay ─── */
-    #config-overlay {
-      position: fixed; inset: 0;
-      background: rgba(220,235,245,0.45);
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
-      z-index: 60;
-      display: none;
-      align-items: flex-end;
-      justify-content: center;
-      padding-bottom: 0;
-    }
-    #config-overlay.visible { display: flex; }
-
-    #config-panel {
-      background: rgba(255,255,255,0.97);
-      border-radius: 24px 24px 0 0;
-      padding: 28px 24px 40px;
-      width: 100%;
-      max-width: 480px;
-      box-shadow: 0 -8px 36px rgba(60,120,170,0.14);
-      border: 1px solid rgba(185,215,235,0.5);
-      border-bottom: none;
-    }
-    #config-panel h2 { font-size: 15px; font-weight: 500; color: #1A3347; margin-bottom: 4px; }
-    #config-panel .config-sub { font-size: 11.5px; color: #7AAFC8; margin-bottom: 22px; line-height: 1.5; }
-    .config-field { margin-bottom: 16px; }
-    .config-field label {
-      display: block; font-size: 10.5px; font-weight: 500;
-      color: #4E7A95; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px;
-    }
-    .config-field select, .config-field input {
-      width: 100%; background: rgba(240,248,253,0.8);
-      border: 1px solid rgba(185,215,235,0.7);
-      border-radius: 12px; padding: 11px 14px;
-      font-size: 14px; color: #2B4A62; font-family: inherit;
-      outline: none; transition: border-color 0.15s;
-      appearance: none; -webkit-appearance: none;
-    }
-    .config-field select:focus, .config-field input:focus { border-color: #7AAFC8; background: white; }
-    .config-hint { font-size: 10px; color: #A8C4D4; margin-top: 5px; line-height: 1.5; }
-    .config-actions { display: flex; gap: 10px; margin-top: 20px; }
-    .btn-cancel {
-      flex: 1; padding: 12px; border-radius: 100px;
-      border: 1px solid rgba(185,215,235,0.6); background: transparent;
-      font-size: 14px; color: #7AAFC8; cursor: pointer; font-family: inherit;
-    }
-    .btn-connect {
-      flex: 2; padding: 12px; border-radius: 100px; border: none;
-      background: linear-gradient(135deg, #7AD3FF, #6083FF);
-      font-size: 14px; color: white; cursor: pointer;
-      font-family: inherit; font-weight: 500;
-      box-shadow: 0 3px 14px rgba(96,131,255,0.3);
-    }
-    .btn-connect:disabled { opacity: 0.4; }
-    #config-error { font-size: 11px; color: #c05050; margin-top: 10px; display: none; text-align: center; }
 
     /* ─── Bottom spacer so last content isn't behind sticky reset hint ─── */
     #bottom-spacer { height: 16px; background: #E8F3FA; flex-shrink: 0; }
@@ -258,8 +182,6 @@
 <!-- Sticky title bar -->
 <div id="title-bar">
   <h1>Vancouver Greenest City Projects</h1>
-  <span id="connection-badge"></span>
-  <div id="config-btn" title="Connect to Tableau">⚙</div>
 </div>
 
 <!-- Map -->
@@ -296,27 +218,6 @@
 <!-- Tooltip -->
 <div id="tooltip"></div>
 
-<!-- Config overlay (bottom sheet) -->
-<div id="config-overlay">
-  <div id="config-panel">
-    <h2>Connect to Tableau</h2>
-    <p class="config-sub">Choose the worksheet and field that contains the Greenest City goal categories.</p>
-    <div class="config-field">
-      <label>Worksheet</label>
-      <select id="ws-select"><option value="">Loading worksheets…</option></select>
-    </div>
-    <div class="config-field">
-      <label>Category field name</label>
-      <input id="field-input" type="text" placeholder="e.g. Category2" value="Category2">
-      <p class="config-hint">Must match the field name in Tableau exactly (case-sensitive).<br>Expected values: Local-Food, Clean-Air, Green-Buildings, etc.</p>
-    </div>
-    <div id="config-error"></div>
-    <div class="config-actions">
-      <button class="btn-cancel" id="config-cancel">Cancel</button>
-      <button class="btn-connect" id="config-save">Connect</button>
-    </div>
-  </div>
-</div>
 
 <script>
 /* ══════════════════════════════════════════════════════
@@ -542,7 +443,6 @@ function selectCategory(category, source) {
   if (flowerSelectFn) flowerSelectFn(category);
   filterMap(category);
   updateChart(category);
-  if (source === 'user') pushFilterToTableau(category);
 }
 
 /* ══════════════════════════════════════════════════════
@@ -913,7 +813,6 @@ function buildFlower(data) {
   document.addEventListener('click', (e) => {
     if (!document.getElementById('flower-panel').contains(e.target) &&
         !e.target.closest('#reset-hint') &&
-        !e.target.closest('#config-overlay') &&
         !e.target.closest('#chart-panel')) {
       if (currentCategory !== null) selectCategory(null, 'user');
     }
@@ -925,146 +824,6 @@ function buildFlower(data) {
   });
 }
 
-/* ══════════════════════════════════════════════════════
-   TABLEAU INTEGRATION
-══════════════════════════════════════════════════════ */
-let tableauWS    = null;
-let tableauField = null;
-let suppressSync = false;
-
-(function loadTableauAPI() {
-  if (window.self === window.top) return;
-  const s = document.createElement('script');
-  s.src = 'https://tableau.github.io/extensions-api/lib/tableau.extensions.1.latest.js';
-  s.onload = () => initTableau();
-  s.onerror = () => console.info('Tableau Extensions API not available.');
-  document.head.appendChild(s);
-})();
-
-async function initTableau() {
-  try {
-    await tableau.extensions.initializeAsync({ configure: openConfigPanel });
-    const settings = tableau.extensions.settings.getAll();
-    if (settings.worksheetName && settings.fieldName) {
-      connectWorksheet(settings.worksheetName, settings.fieldName);
-    } else {
-      openConfigPanel();
-    }
-  } catch (e) { console.warn('Tableau initialization failed:', e); }
-}
-
-function connectWorksheet(wsName, fieldName) {
-  try {
-    const ws = tableau.extensions.dashboardContent.dashboard.worksheets.find(w => w.name === wsName);
-    if (!ws) { console.warn(`Worksheet "${wsName}" not found.`); return; }
-    tableauWS    = ws;
-    tableauField = fieldName;
-    ws.addEventListener(tableau.TableauEventType.FilterChanged, onTableauFilterChanged);
-    syncFromTableau(ws, fieldName);
-    showConnectionBadge(wsName);
-  } catch (e) { console.warn('Could not connect to worksheet:', e); }
-}
-
-async function syncFromTableau(ws, fieldName) {
-  try {
-    const filters = await ws.getFiltersAsync();
-    const f = filters.find(fi => fi.fieldName === fieldName);
-    if (f && !f.isAllSelected && f.appliedValues?.length === 1) {
-      const val = f.appliedValues[0].value;
-      if (goalOrder.includes(val)) selectCategory(val, 'tableau');
-    }
-  } catch (e) { console.warn('Could not read initial filters:', e); }
-}
-
-async function onTableauFilterChanged(event) {
-  if (suppressSync) return;
-  try {
-    const filter = await event.getFilterAsync();
-    if (filter.fieldName !== tableauField) return;
-    if (filter.isAllSelected || !filter.appliedValues?.length) {
-      selectCategory(null, 'tableau');
-    } else if (filter.appliedValues.length === 1) {
-      const val = filter.appliedValues[0].value;
-      selectCategory(goalOrder.includes(val) ? val : null, 'tableau');
-    }
-  } catch (e) { console.warn('Filter change handler error:', e); }
-}
-
-async function pushFilterToTableau(category) {
-  if (!tableauWS || !tableauField) return;
-  suppressSync = true;
-  try {
-    if (category) {
-      await tableauWS.applyFilterAsync(tableauField, [category], tableau.FilterUpdateType.Replace);
-    } else {
-      await tableauWS.applyFilterAsync(tableauField, [], tableau.FilterUpdateType.All);
-    }
-  } catch (e) { console.warn('Could not apply Tableau filter:', e); }
-  finally { setTimeout(() => { suppressSync = false; }, 400); }
-}
-
-function openConfigPanel() {
-  const overlay = document.getElementById('config-overlay');
-  const select  = document.getElementById('ws-select');
-  try {
-    const sheets = tableau.extensions.dashboardContent.dashboard.worksheets;
-    select.innerHTML = sheets.map(ws => `<option value="${ws.name}">${ws.name}</option>`).join('');
-    const saved = tableau.extensions.settings.get('worksheetName');
-    if (saved) select.value = saved;
-  } catch (e) {
-    select.innerHTML = '<option value="">— could not load worksheets —</option>';
-  }
-  const savedField = tableau.extensions.settings.get?.('fieldName');
-  if (savedField) document.getElementById('field-input').value = savedField;
-  overlay.classList.add('visible');
-  document.getElementById('config-error').style.display = 'none';
-}
-
-document.getElementById('config-save').addEventListener('click', async () => {
-  const wsName    = document.getElementById('ws-select').value;
-  const fieldName = document.getElementById('field-input').value.trim();
-  const errEl     = document.getElementById('config-error');
-  if (!wsName || !fieldName) {
-    errEl.textContent = 'Please select a worksheet and enter a field name.';
-    errEl.style.display = 'block'; return;
-  }
-  try {
-    tableau.extensions.settings.set('worksheetName', wsName);
-    tableau.extensions.settings.set('fieldName', fieldName);
-    await tableau.extensions.settings.saveAsync();
-  } catch (e) { console.warn('Could not save settings:', e); }
-  document.getElementById('config-overlay').classList.remove('visible');
-  connectWorksheet(wsName, fieldName);
-});
-
-document.getElementById('config-cancel').addEventListener('click', () => {
-  document.getElementById('config-overlay').classList.remove('visible');
-});
-
-document.getElementById('config-btn').addEventListener('click', (e) => {
-  e.stopPropagation();
-  if (typeof tableau !== 'undefined') {
-    openConfigPanel();
-  } else {
-    alert('This button connects the map to Tableau.\nOpen the file as a Tableau Extension to use it.');
-  }
-});
-
-// Close config overlay on tap outside panel
-document.getElementById('config-overlay').addEventListener('click', (e) => {
-  if (e.target === document.getElementById('config-overlay')) {
-    document.getElementById('config-overlay').classList.remove('visible');
-  }
-});
-
-function showConnectionBadge(wsName) {
-  const badge = document.getElementById('connection-badge');
-  const btn   = document.getElementById('config-btn');
-  badge.textContent = `● ${wsName}`;
-  badge.style.display = 'inline-block';
-  btn.classList.add('connected');
-  btn.title = `Connected to "${wsName}" — click to reconfigure`;
-}
 </script>
 </body>
 </html>
